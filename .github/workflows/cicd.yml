@@ -4,6 +4,7 @@ on:
     paths:
       - '.github/workflows/**' # yamlが変更されたら
       - 'cicd-section/api/**' # ソースコードの変更がpushされたら
+  workflow_dispatch: # 手動実行を可能にする
 
 # 環境変数
 env:
