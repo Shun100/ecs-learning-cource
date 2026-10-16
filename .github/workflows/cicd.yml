@@ -2,6 +2,7 @@ name: Web API Deploy Pipeline
 on:
   push: # トリガーイベント
     paths:
+      - '.github/workflows/**' # yamlが変更されたら
       - 'cicd-section/api/**' # ソースコードの変更がpushされたら
 
 # 環境変数
@@ -56,15 +57,3 @@ jobs:
           docker image push $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }} # ECRにpush
 
   # Deploy
-
-  # ジョブはそれぞれ並列で動く
-  hello-job:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Hello"
-      - run: echo "GitHub Actions."
-
-  goodbye-job:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Goodbye, GitHub Actions."
