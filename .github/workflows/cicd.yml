@@ -38,7 +38,7 @@ jobs:
         with: # usesに対してパラメータ値を与える
           aws-region: ${{ env.AWS_REGION }} # 環境変数から設定
           # 秘匿性が高いものはENVではなくSECRETSという別の領域を使用する。SECRETS領域はGitHub ActionsのGUIで設定する。
-          role-to-assume: ${{ secretes.AWS_ROLE_TO_ASSUME }} 
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }} 
 
       # Open ID Connectの設定を行ってECRにログインできるようにする
       - name: Login to Amazon ECR
