@@ -51,10 +51,8 @@ jobs:
         env:
           # 1つ前のステップ'login-ecr'の出力結果のレジストリ変数を使用する
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        run:
+        run: | # パイプを記述すると複数コマンドを実行できるようになる
           # github.sha: GitHubにプッシュしたコミットのハッシュ
           # コミットハッシュが決まったので、一旦tempで付けていたタグ名を改めて付け直す
           docker image tag temp_api_image:latest $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}
           docker image push $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }} # ECRにpush
-
-  # Deploy
