@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/**'
       - 'cicd-section/api/**'
+      - 'cicd-section/.aws/**'
   workflow_dispatch:
 
 # 環境変数
