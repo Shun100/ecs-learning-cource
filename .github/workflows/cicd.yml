@@ -94,8 +94,8 @@ jobs:
       
       # アーティファクトからイメージURIを取得して環境変数に設定する
       # GITHUB_ENVはGitHub Actionsの中で使用できる特殊な環境変数
-      - name:
-        - run: |
+      - name: Set API image URI
+        run: |
           echo "API_IMAGE_URI=$(cat artifacts/api-image-uri.txt)" >> $GITHUB_ENV
 
       # タスク定義更新
