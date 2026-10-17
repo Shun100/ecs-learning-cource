@@ -1,10 +1,11 @@
 name: Web API Deploy Pipeline
+
 on:
-  push: # トリガーイベント
+  push:
     paths:
-      - '.github/workflows/**' # yamlが変更されたら
-      - 'cicd-section/api/**' # ソースコードの変更がpushされたら
-  workflow_dispatch: # 手動実行を可能にする
+      - '.github/workflows/**'
+      - 'cicd-section/api/**'
+  workflow_dispatch:
 
 # 環境変数
 env:
@@ -12,102 +13,95 @@ env:
   ECS_CLUSTER: my-app-cluster
   ECS_SERVICE: my-app-api-service
   ECR_REPOSITORY: my-app-api
-  ECS_TASK_DEFINITION_API: cicd-section/.aws/task-def-api.json # ECSタスク定義ファイル
+  ECS_TASK_DEFINITION_API: cicd-section/.aws/task-def-api.json
 
-# Open ID Connectに必要な権限の設定
+# OpenID Connect に必要な権限
 permissions:
   id-token: write
   contents: read
 
-# CIジョブ (各ジョブは並列実行される)
 jobs:
   # Test + Build
-  # gradlew buildでText ＋ Buildを実行した後、Dockerイメージを生成してECSにpushする
   test-and-build:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: cicd-section/api # 以降のジョブがこのディレクトリで実行される
+        working-directory: cicd-section/api
+
     steps:
       # Checkout code
-      - uses: actions/checkout@v4 # uses: Market Placeで公開されているThird party製ライブラリを使用する
-      
+      - uses: actions/checkout@v4
+
       - name: Run Tests and Build an image
-        run: docker image build -t temp_api_image:latest . # gradlew buildが実行される
-      
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with: # usesに対してパラメータ値を与える
-          aws-region: ${{ env.AWS_REGION }} # 環境変数から設定
-          # 秘匿性が高いものはENVではなくSECRETSという別の領域を使用する。SECRETS領域はGitHub ActionsのGUIで設定する。
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }} 
+        run: docker image build -t temp_api_image:latest .
 
-      # Open ID Connectの設定を行ってECRにログインできるようにする
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # ECRへのイメージのpush
-      - name: Push the image to Amazon ECR
-        env:
-          # 1つ前のステップ'login-ecr'の出力結果のレジストリ変数を使用する
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        
-        # パイプを記述すると複数コマンドを実行できるようになる
-        # github.sha: GitHubにプッシュしたコミットのハッシュ
-        # コミットハッシュが決まったので、一旦tempで付けていたタグ名を改めて付け直す
-        # DockerイメージファイルのURIを後のDeployジョブに渡すためにURIをファイルに退避している
-        # (異なるジョブは異なるマシンで実行されるため、値の受け渡しはこのように一工夫が必要)
-        run: |
-          docker image tag temp_api_image:latest $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}
-          docker image push $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }} # ECRにpush
-          echo $ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }} > api-image-uri.txt
-      
-      # ファイルにURIを退避しただけではジョブ終了時に削除されてしますので、アーティファクトとしてアップロードして残せるようにする
-      - name: Upload the image uri files as an artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: api-image-uri
-          path: cicd-section/api/api-image-uri.txt
-
-  # Deploy (タスク定義の更新)
-  deploy:
-    runs-on: ubuntu-latest
-    needs: [test-and-build] # このジョブが完了してから実行する
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      
+      # AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-      
-      # アーティファクトからデータをダウンロードする
+
+      # Login to Amazon ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Push image to Amazon ECR
+      - name: Push the image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker image tag temp_api_image:latest "$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
+          docker image push "$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
+          echo "$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}" > api-image-uri.txt
+
+      # Upload artifact (updated to v7)
+      - name: Upload the image URI as an artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: api-image-uri
+          path: cicd-section/api/api-image-uri.txt
+          if-no-files-found: error
+
+  # Deploy
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [test-and-build]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+      # Download artifact (updated to v5)
       - name: Download the artifact
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v5
         with:
           name: api-image-uri
           path: artifacts
-      
-      # アーティファクトからイメージURIを取得して環境変数に設定する
-      # GITHUB_ENVはGitHub Actionsの中で使用できる特殊な環境変数
+
+      # Read image URI and set environment variable
       - name: Set API image URI
         run: |
-          echo "API_IMAGE_URI=$(cat artifacts/api-image-uri.txt)" >> $GITHUB_ENV
+          echo "API_IMAGE_URI=$(cat artifacts/api-image-uri.txt)" >> "$GITHUB_ENV"
 
-      # タスク定義更新
-      - name: Fill in the new image URI in the amazon ECS task definition
+      # Update ECS task definition
+      - name: Fill in the new image URI in the Amazon ECS task definition
         id: render-task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: ${{ env.ECS_TASK_DEFINITION_API }}
           container-name: api
           image: ${{ env.API_IMAGE_URI }}
-      
-      # ECSへのデプロイ
+
+      # Deploy to ECS
       - name: Deploy ECS task
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
