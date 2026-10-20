@@ -1,0 +1,9 @@
+inventory:
+  client:
+    url: http://inventory:8080/api/inventories # http://<DockerCompose内で設定したコンテナ名>:<ポート>/<URI>
+management:
+  endpoints:
+    web:
+      base-path: /api/products/monitor
+    exposure:
+      include: health
